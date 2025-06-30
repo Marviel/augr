@@ -1,4 +1,13 @@
 *.local.mdc
 
+*.pyc
+**/*.pyc
+
 
 .env
+
+venv/*
+.venv/*
+
+venv/
+.venv/
