@@ -53,10 +53,12 @@ def update_pyproject_version(new_version):
     pyproject_path = Path("pyproject.toml")
     content = pyproject_path.read_text()
 
+    # More specific regex to only match the project version in the [project] section
     new_content = re.sub(
-        r'version = "[^"]+"',
-        f'version = "{new_version}"',
-        content
+        r'(\[project\].*?)version = "[^"]+"',
+        rf'\1version = "{new_version}"',
+        content,
+        flags=re.DOTALL
     )
 
     pyproject_path.write_text(new_content)
