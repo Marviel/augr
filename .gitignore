@@ -13,3 +13,8 @@ venv/*
 
 venv/
 .venv/
+
+dist/
+
+dist/**
+build/**
