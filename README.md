@@ -12,7 +12,7 @@ AI-powered dataset augmentation tool using Braintrust proxy with structured outp
 
 ## Installation
 
-### Option 1: Install from PyPI (Coming Soon)
+### Option 1: Install from PyPI
 
 ```bash
 # Install globally
@@ -32,10 +32,10 @@ augr
 
 ```bash
 # Install latest version
-pip install git+https://github.com/yourusername/augr.git
+pip install git+https://github.com/Marviel/augr.git
 
 # Or with uv
-uv tool install git+https://github.com/yourusername/augr.git
+uv tool install git+https://github.com/Marviel/augr.git
 
 # Then use anywhere
 augr
@@ -46,15 +46,15 @@ augr
 For development or local installation:
 
 ```bash
-git clone https://github.com/yourusername/augr.git
+git clone https://github.com/Marviel/augr.git
 cd augr
-uv pip install -e .
+uv sync --all-extras --dev
 
 # Test the installation
-python test_installation.py
+uv run python test_installation.py
 
 # Use anywhere
-augr
+uv run augr
 ```
 
 ## Usage
@@ -125,6 +125,41 @@ result = await ai.gen_obj(
 print(result.message)  # Structured output
 ```
 
+## Contributing
+
+### Making a Release
+
+This project uses automated releases via GitHub Actions:
+
+1. Update version in `pyproject.toml`
+2. Create and push a git tag: `git tag -a v0.2.0 -m "Release v0.2.0" && git push origin v0.2.0`
+3. GitHub Actions will automatically:
+   - Run tests
+   - Build the package
+   - Upload to PyPI
+   - Create GitHub release
+
+See [RELEASE.md](RELEASE.md) for detailed instructions.
+
+### Development
+
+```bash
+# Clone and setup
+git clone https://github.com/Marviel/augr.git
+cd augr
+uv sync --all-extras --dev
+
+# Run tests
+uv run python test_installation.py
+
+# Format code
+uv run black .
+uv run ruff check --fix .
+
+# Build package
+uv run python -m build
+```
+
 ## License
 
-[Your License Here]
+MIT
