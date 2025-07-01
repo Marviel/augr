@@ -4,13 +4,8 @@ Enhanced CLI interface for dataset augmentation with iterative workflows.
 
 import asyncio
 import json
-import os
 from pathlib import Path
 from typing import List, Optional
-
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Interactive CLI components
 try:
@@ -33,16 +28,21 @@ class DatasetAugmentationCLI:
 
     def _setup_service(self) -> bool:
         """Initialize the service with API keys"""
-        braintrust_api_key = os.getenv("BRAINTRUST_API_KEY")
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-
-        if not braintrust_api_key:
-            print("❌ Error: BRAINTRUST_API_KEY environment variable is required")
+        try:
+            from .config import get_configured_api_key
+            
+            # Get API key using the new configuration system
+            # This will handle interactive setup if needed
+            braintrust_api_key = get_configured_api_key()
+            
+            # Initialize services
+            self.service = DatasetAugmentationService(braintrust_api_key)
+            self.braintrust_client = BraintrustClient(braintrust_api_key)
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to set up AUGR: {e}")
             return False
-
-        self.service = DatasetAugmentationService(braintrust_api_key)
-        self.braintrust_client = BraintrustClient(braintrust_api_key)
-        return True
 
     async def run(self):
         """Main CLI application entry point"""
