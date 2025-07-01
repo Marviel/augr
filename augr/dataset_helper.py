@@ -1,7 +1,7 @@
 # dataset_helper.py
 # Author: Luke Bechtel (@Marviel)
 # Summary: This file will help pull datasets from braintrust and augment them with more synthetic data.
-# 
+#
 # This is the main entry point that uses the new modular structure.
 # For the enhanced CLI with iterative workflows, run: python -m cli
 # For legacy compatibility, this file maintains the original interface.
@@ -9,14 +9,13 @@
 import asyncio
 import json
 import os
-from typing import List
+
 from dotenv import load_dotenv
 
-# Import from the new modular structure
-from .models import DatasetSample, GapAnalysisResult, InferredSchema, GeneratedSample
-from .braintrust_client import BraintrustClient
 from .augmentation_service import DatasetAugmentationService
 from .cli import DatasetAugmentationCLI
+
+# Import from the new modular structure
 
 load_dotenv()
 
@@ -39,7 +38,7 @@ async def main():
     - Mode 1: Guided dataset augmentation with iterative refinement
     - Mode 2: Direct JSON file upload
     """
-    
+
     cli = DatasetAugmentationCLI()
     await cli.run()
 
@@ -52,25 +51,25 @@ async def legacy_workflow():
     """
     print("🧠 Dataset Augmentation CLI Tool (Legacy Mode)")
     print("=" * 50)
-    
+
     # Get API key
     braintrust_api_key = os.getenv("BRAINTRUST_API_KEY")
-    
+
     if not braintrust_api_key:
         print("❌ Error: BRAINTRUST_API_KEY environment variable is required!")
         return
-    
+
     try:
         service = DatasetAugmentationService(braintrust_api_key)
-        
+
         # Step 1: Get dataset ID from user
         print("\n📊 Dataset Selection")
-        
+
         # Option to list datasets
         questions = [inquirer.Confirm('list_datasets', message="Would you like to see available datasets first?", default=False)]
         answers = inquirer.prompt(questions)
         list_datasets_choice = answers['list_datasets']
-        
+
         if list_datasets_choice:
             print("\n🔍 Fetching available datasets...")
             try:
@@ -85,22 +84,22 @@ async def legacy_workflow():
                     print("No datasets found.")
             except Exception as e:
                 print(f"⚠️  Could not list datasets: {e}")
-        
+
         questions = [inquirer.Text('dataset_id', message="Enter the dataset ID to augment")]
         answers = inquirer.prompt(questions)
         dataset_id = answers['dataset_id']
         if not dataset_id.strip():
             print("❌ Dataset ID is required")
             return
-        
+
         # Step 2: Get number of samples to analyze
-        questions = [inquirer.Text('num_samples', 
+        questions = [inquirer.Text('num_samples',
                                    message="How many samples should I analyze? (recommended: 20-50)",
                                    default="30",
                                    validate=lambda _, x: x.isdigit() and int(x) > 0)]
         answers = inquirer.prompt(questions)
         num_samples = int(answers['num_samples'])
-        
+
         # Step 3: Fetch samples
         print(f"\n📥 Fetching {num_samples} samples from dataset...")
         try:
@@ -112,7 +111,7 @@ async def legacy_workflow():
         except Exception as e:
             print(f"❌ Failed to fetch samples: {e}")
             return
-        
+
         # Step 4: Analyze gaps (legacy method)
         print(f"\n🔍 Analyzing dataset gaps with {DEFAULT_MODEL}...")
         try:
@@ -121,51 +120,51 @@ async def legacy_workflow():
         except Exception as e:
             print(f"❌ Failed to analyze gaps: {e}")
             return
-        
+
         # Step 5: Show suggestions and get user selection
-        print(f"\n💡 Gap Analysis Results:")
+        print("\n💡 Gap Analysis Results:")
         print(f"Overall Assessment: {gap_analysis.overall_assessment}")
-        print(f"\n📋 Suggestions:")
-        
+        print("\n📋 Suggestions:")
+
         choices = []
         for i, suggestion in enumerate(gap_analysis.suggestions, 1):
             print(f"\n{i}. {suggestion.title}")
             print(f"   Description: {suggestion.description}")
             print(f"   Rationale: {suggestion.rationale}")
             choices.append((f"{suggestion.title}", suggestion))
-        
+
         if not choices:
             print("❌ No suggestions generated")
             return
-        
+
         # Interactive selection
         questions = [inquirer.Checkbox('suggestions',
                                         message="Select suggestions to generate samples for",
                                         choices=choices)]
         answers = inquirer.prompt(questions)
         selected_suggestions = answers['suggestions']
-        
+
         if not selected_suggestions:
             print("❌ No suggestions selected")
             return
-        
+
         # Step 6: Infer dataset schema (Phase 1)
-        print(f"\n🔍 Analyzing dataset schema for precise generation...")
+        print("\n🔍 Analyzing dataset schema for precise generation...")
         try:
             schema = await service.infer_dataset_schema(samples)
             print("✅ Schema analysis complete")
             print(f"   📋 Input Schema: {len(schema.input_schema.get('properties', {}))} properties")
-            print(f"   📋 Expected Schema: {len(schema.expected_schema.get('properties', {}))} properties")  
+            print(f"   📋 Expected Schema: {len(schema.expected_schema.get('properties', {}))} properties")
             print(f"   📋 Metadata Schema: {len(schema.metadata_schema.get('properties', {}))} properties")
             print(f"   📋 Observed {len(schema.observed_patterns)} concrete patterns")
         except Exception as e:
             print(f"❌ Failed to analyze schema: {e}")
             return
-        
+
         # Step 7: Generate samples using documented schema (Phase 2)
         print(f"\n🏭 Generating {len(selected_suggestions)} samples using documented schema...")
         generated_samples = []
-        
+
         for suggestion in selected_suggestions:
             try:
                 print(f"  📝 Generating sample for: {suggestion.title}")
@@ -174,33 +173,33 @@ async def legacy_workflow():
                 print(f"  ✅ Generated: {suggestion.title}")
             except Exception as e:
                 print(f"  ❌ Failed to generate sample for '{suggestion.title}': {e}")
-        
+
         if not generated_samples:
             print("❌ No samples were successfully generated")
             return
-        
+
         # Step 8: Preview generated samples
         print(f"\n👀 Preview of {len(generated_samples)} generated samples:")
         print("=" * 60)
-        
+
         for i, sample in enumerate(generated_samples, 1):
             print(f"\nSample {i}:")
             print(f"Input: {json.dumps(sample.input, indent=2)}")
             print(f"Expected: {json.dumps(sample.expected, indent=2)}")
             print(f"Metadata: {json.dumps(sample.metadata, indent=2)}")
             print("-" * 40)
-        
+
         # Step 9: Confirm push to dataset
         questions = [inquirer.Confirm('push_confirmed',
                                        message=f"Push these {len(generated_samples)} samples to the dataset?",
                                        default=True)]
         answers = inquirer.prompt(questions)
         push_confirmed = answers['push_confirmed']
-        
+
         if not push_confirmed:
             print("❌ Operation cancelled by user")
             return
-        
+
         # Step 10: Push to dataset
         print(f"\n📤 Pushing {len(generated_samples)} samples to dataset...")
         try:
@@ -209,16 +208,16 @@ async def legacy_workflow():
         except Exception as e:
             print(f"❌ Failed to push samples: {e}")
             return
-        
+
         # Step 11: Summary
-        print(f"\n🎉 Dataset Augmentation Complete!")
+        print("\n🎉 Dataset Augmentation Complete!")
         print(f"   • Dataset ID: {dataset_id}")
         print(f"   • Samples analyzed: {len(samples)}")
         print(f"   • Suggestions generated: {len(gap_analysis.suggestions)}")
         print(f"   • Selected suggestions: {len(selected_suggestions)}")
         print(f"   • New samples created: {len(generated_samples)}")
         print(f"   • Estimated dataset size increase: {len(generated_samples)}/{len(samples)} ({100*len(generated_samples)/len(samples):.1f}%)")
-        
+
     except KeyboardInterrupt:
         print("\n❌ Operation cancelled by user")
     except Exception as e:
@@ -227,7 +226,7 @@ async def legacy_workflow():
 
 if __name__ == "__main__":
     import sys
-    
+
     # Check for legacy mode flag
     if "--legacy" in sys.argv:
         print("🔄 Running in legacy mode...")

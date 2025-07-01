@@ -94,7 +94,13 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "black", version = "24.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "black", version = "25.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "build" },
+    { name = "pytest", version = "8.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "pytest", version = "8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
+    { name = "ruff" },
+    { name = "twine" },
 ]
 
 [package.metadata]
@@ -112,7 +118,14 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "build", specifier = ">=1.2.2.post1" }]
+dev = [
+    { name = "black", specifier = ">=23.0.0" },
+    { name = "build", specifier = ">=0.10.0" },
+    { name = "build", specifier = ">=1.2.2.post1" },
+    { name = "pytest", specifier = ">=7.0.0" },
+    { name = "ruff", specifier = ">=0.1.0" },
+    { name = "twine", specifier = ">=4.0.0" },
+]
 
 [[package]]
 name = "backports-tarfile"

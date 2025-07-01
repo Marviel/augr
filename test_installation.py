@@ -5,7 +5,7 @@ Test script to verify AUGR installation works correctly
 
 import os
 import sys
-import tempfile
+
 
 def test_basic_import():
     """Test that the package can be imported"""
@@ -42,7 +42,7 @@ def test_env_handling():
     try:
         # Set a test API key
         os.environ['BRAINTRUST_API_KEY'] = 'test-key-12345'
-        
+
         from augr.ai_client import create_ai
         ai_client = create_ai()
         print("✅ Environment variable handling works")
@@ -59,7 +59,7 @@ def test_entry_point():
     """Test that the entry point script exists"""
     try:
         import subprocess
-        result = subprocess.run([sys.executable, '-c', 'import augr.cli; print("Entry point accessible")'], 
+        result = subprocess.run([sys.executable, '-c', 'import augr.cli; print("Entry point accessible")'],
                               capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             print("✅ Entry point accessible")
@@ -75,7 +75,7 @@ def main():
     """Run all tests"""
     print("🧪 Testing AUGR Installation")
     print("=" * 30)
-    
+
     tests = [
         test_basic_import,
         test_cli_import,
@@ -83,20 +83,20 @@ def main():
         test_env_handling,
         test_entry_point,
     ]
-    
+
     results = []
     for test in tests:
         results.append(test())
         print()
-    
+
     # Summary
     passed = sum(results)
     total = len(results)
-    
+
     print("📊 Test Summary")
     print("-" * 15)
     print(f"Passed: {passed}/{total}")
-    
+
     if passed == total:
         print("🎉 All tests passed! AUGR is ready to use.")
         return 0
@@ -105,4 +105,4 @@ def main():
         return 1
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

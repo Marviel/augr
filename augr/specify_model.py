@@ -8,11 +8,11 @@ def specify_ai_model(model: str) -> str:
 
     For now, this will just auto translate anything we detect that is being served from bedrock to the correct hyperspecific model name.
     """
-    
+
     # If already fully qualified, return as-is
     if ":" in model and ("." in model or model.startswith("us.") or model.startswith("eu.") or model.startswith("apac.")):
         return model
-    
+
     # Define mapping from generic names to specific Bedrock model identifiers
     # Always default to "us." prefixed versions when available
     model_mappings = {
@@ -30,17 +30,17 @@ def specify_ai_model(model: str) -> str:
         "claude-3-opus": "us.anthropic.claude-3-opus-20240229-v1:0",
         "claude-3-sonnet": "us.anthropic.claude-3-sonnet-20240229-v1:0",
         "claude-3-haiku": "us.anthropic.claude-3-haiku-20240307-v1:0",
-        
+
         # Amazon Nova models
         "nova-pro": "us.amazon.nova-pro-v1:0",
         "nova-micro": "us.amazon.nova-micro-v1:0",
         "nova-lite": "us.amazon.nova-lite-v1:0",
-        
+
         # Amazon Titan models
         "titan-text-premier": "amazon.titan-text-premier-v1:0",
         "titan-text-express": "amazon.titan-text-express-v1",
         "titan-text-lite": "amazon.titan-text-lite-v1",
-        
+
         # Meta Llama models
         "llama3-3-70b": "us.meta.llama3-3-70b-instruct-v1:0",
         "llama3.3-70b": "us.meta.llama3-3-70b-instruct-v1:0",
@@ -60,31 +60,31 @@ def specify_ai_model(model: str) -> str:
         "llama3.1-8b": "us.meta.llama3-1-8b-instruct-v1:0",
         "llama3-70b": "meta.llama3-70b-instruct-v1:0",
         "llama3-8b": "meta.llama3-8b-instruct-v1:0",
-        
+
         # Mistral models
         "mistral-large": "mistral.mistral-large-2402-v1:0",
         "mistral-small": "mistral.mistral-small-2402-v1:0",
         "mixtral-8x7b": "mistral.mixtral-8x7b-instruct-v0:1",
         "mistral-7b": "mistral.mistral-7b-instruct-v0:2",
-        
+
         # Cohere models
         "command-r-plus": "cohere.command-r-plus-v1:0",
         "command-r": "cohere.command-r-v1:0",
         "command-text": "cohere.command-text-v14",
         "command-light": "cohere.command-light-text-v14",
     }
-    
+
     # Normalize the input model name
     model_lower = model.lower().strip()
-    
+
     # Try exact match first
     if model_lower in model_mappings:
         return model_mappings[model_lower]
-    
+
     # Try partial matching for more flexible input
     for generic_name, specific_name in model_mappings.items():
         if generic_name in model_lower:
             return specific_name
-    
+
     # If no mapping found, return the original model name
     return model

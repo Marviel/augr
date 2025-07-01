@@ -5,17 +5,17 @@ Service for LLM-based dataset augmentation with iterative refinement capabilitie
 import json
 from typing import List
 
-from .models import (
-    DatasetSample, 
-    GapAnalysisResult, 
-    GapAnalysisSuggestion, 
-    InferredSchema,
-    GeneratedSample,
-    CaseAbstract,
-    CaseAbstractList
-)
-from .braintrust_client import BraintrustClient
 from .ai_client import create_ai
+from .braintrust_client import BraintrustClient
+from .models import (
+    CaseAbstract,
+    CaseAbstractList,
+    DatasetSample,
+    GapAnalysisResult,
+    GapAnalysisSuggestion,
+    GeneratedSample,
+    InferredSchema,
+)
 
 # Constants
 DEFAULT_MODEL = "claude-4-sonnet"
@@ -23,17 +23,17 @@ DEFAULT_MODEL = "claude-4-sonnet"
 
 class DatasetAugmentationService:
     """Main service for dataset augmentation with enhanced iterative capabilities"""
-    
+
     def __init__(self, braintrust_api_key: str):
         self.braintrust_client = BraintrustClient(braintrust_api_key)
         self.ai = create_ai(
             model=DEFAULT_MODEL,
             temperature=0.0
         )
-    
+
     async def analyze_dataset_gaps(self, samples: List[DatasetSample]) -> GapAnalysisResult:
         """Analyze dataset samples and identify gaps (legacy method for backward compatibility)"""
-        
+
         # Prepare sample data for analysis
         sample_data = []
         for i, sample in enumerate(samples[:10]):  # Show first 10 for context
@@ -43,7 +43,7 @@ class DatasetAugmentationService:
                 "expected": sample.expected,
                 "metadata": sample.metadata
             })
-        
+
         prompt = f"""You are an expert AI trainer analyzing a dataset to identify gaps in test coverage.
 
 DATASET SAMPLES TO ANALYZE:
@@ -88,19 +88,19 @@ Return your analysis as JSON matching this exact structure:
                 ],
                 thinking_enabled=True
             )
-            
+
             return response
         except Exception as e:
             raise Exception(f"Failed to analyze dataset gaps: {str(e)}")
 
     async def generate_case_abstracts_with_guidance(
-        self, 
-        samples: List[DatasetSample], 
+        self,
+        samples: List[DatasetSample],
         user_guidance: str,
         previous_feedback: str = ""
     ) -> CaseAbstractList:
         """Generate case abstracts based on user guidance and optional feedback"""
-        
+
         # Prepare sample data for analysis
         sample_data = []
         for i, sample in enumerate(samples[:10]):  # Show first 10 for context
@@ -166,14 +166,14 @@ Return your response as JSON matching this exact structure:
                     {"role": "user", "content": prompt}
                 ]
             )
-            
+
             return response
         except Exception as e:
             raise Exception(f"Failed to generate case abstracts: {str(e)}")
 
     async def infer_dataset_schema(self, reference_samples: List[DatasetSample]) -> InferredSchema:
         """Analyze dataset samples and infer precise JSON Schema for each field (Phase 1)"""
-        
+
         # Prepare sample data for analysis
         sample_data = []
         for i, sample in enumerate(reference_samples[:20]):  # Analyze up to 20 samples for schema
@@ -214,19 +214,19 @@ Remember: Be ruthlessly precise. Only document what you actually see in the data
                     {"role": "user", "content": prompt}
                 ]
             )
-            
+
             return response
         except Exception as e:
             raise Exception(f"Failed to infer dataset schema: {str(e)}")
 
     async def generate_sample_for_case_abstract(
-        self, 
-        case_abstract: CaseAbstract, 
+        self,
+        case_abstract: CaseAbstract,
         reference_samples: List[DatasetSample],
         schema: InferredSchema
     ) -> GeneratedSample:
         """Generate a specific sample based on a case abstract using documented schema (Phase 2)"""
-        
+
         # Show a few reference samples for context
         reference_context = []
         for i, sample in enumerate(reference_samples[:5]):
@@ -278,13 +278,13 @@ Return as JSON:
                     {"role": "user", "content": prompt}
                 ]
             )
-            
+
             generated_sample = response
-                
+
             # Ensure test_name is present in metadata
             if "test_name" not in generated_sample.metadata:
                 generated_sample.metadata["test_name"] = case_abstract.title.lower().replace(" ", "_")
-            
+
             return generated_sample
         except Exception as e:
             raise Exception(f"Failed to generate sample for '{case_abstract.title}': {str(e)}")
@@ -297,7 +297,7 @@ Return as JSON:
         schema: InferredSchema
     ) -> GeneratedSample:
         """Generate a variation of an existing sample based on user request"""
-        
+
         prompt = f"""You are generating a variation of an existing dataset sample.
 
 ORIGINAL SAMPLE:
@@ -338,22 +338,22 @@ Return as JSON:
                 ],
                 thinking_enabled=True
             )
-            
+
             generated_sample = response
-                
+
             # Ensure test_name is present in metadata
             if "test_name" not in generated_sample.metadata:
                 base_name = original_sample.metadata.get("test_name", "variation")
                 generated_sample.metadata["test_name"] = f"{base_name}_variation"
-            
+
             return generated_sample
         except Exception as e:
             raise Exception(f"Failed to generate sample variation: {str(e)}")
 
     # Legacy method for backward compatibility
     async def generate_sample_for_suggestion(
-        self, 
-        suggestion: GapAnalysisSuggestion, 
+        self,
+        suggestion: GapAnalysisSuggestion,
         reference_samples: List[DatasetSample],
         schema: InferredSchema
     ) -> GeneratedSample:
@@ -364,4 +364,4 @@ Return as JSON:
             expected_input_characteristics="Based on existing dataset patterns",
             expected_output_characteristics="Based on existing dataset patterns"
         )
-        return await self.generate_sample_for_case_abstract(case_abstract, reference_samples, schema) 
+        return await self.generate_sample_for_case_abstract(case_abstract, reference_samples, schema)

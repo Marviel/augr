@@ -4,9 +4,10 @@ Simple entry point for the AUGR dataset augmentation tool
 This file provides a fallback way to run AUGR without installing it as a package.
 """
 
-import sys
 import asyncio
 import os
+import sys
+
 
 def main():
     """Main entry point that properly handles module imports"""
@@ -15,7 +16,7 @@ def main():
         current_dir = os.path.dirname(os.path.abspath(__file__))
         if current_dir not in sys.path:
             sys.path.insert(0, current_dir)
-        
+
         # Import and run the CLI
         from augr.cli import main_async
         asyncio.run(main_async())
@@ -35,4 +36,4 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()

@@ -12,23 +12,22 @@ Main modules:
 - dataset_helper: Main entry point (backward compatible)
 """
 
-from .models import (
-    DatasetSample,
-    GapAnalysisSuggestion,
-    GapAnalysisResult,
-    InferredSchema,
-    GeneratedSample,
-    CaseAbstract,
-    CaseAbstractList
-)
-
-from .braintrust_client import BraintrustClient
 from .augmentation_service import DatasetAugmentationService
+from .braintrust_client import BraintrustClient
 from .cli import DatasetAugmentationCLI
+from .models import (
+    CaseAbstract,
+    CaseAbstractList,
+    DatasetSample,
+    GapAnalysisResult,
+    GapAnalysisSuggestion,
+    GeneratedSample,
+    InferredSchema,
+)
 
 __all__ = [
     'DatasetSample',
-    'GapAnalysisSuggestion', 
+    'GapAnalysisSuggestion',
     'GapAnalysisResult',
     'InferredSchema',
     'GeneratedSample',
@@ -37,4 +36,4 @@ __all__ = [
     'BraintrustClient',
     'DatasetAugmentationService',
     'DatasetAugmentationCLI'
-] 
+]
