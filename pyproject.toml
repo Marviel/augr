@@ -47,6 +47,15 @@ Homepage = "https://github.com/Marviel/augr"
 Repository = "https://github.com/Marviel/augr"
 Issues = "https://github.com/Marviel/augr/issues"
 
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
+]
+
 [tool.black]
 line-length = 88
 target-version = ['py38']
