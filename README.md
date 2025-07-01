@@ -59,14 +59,26 @@ uv run augr
 
 ## Usage
 
-### Environment Variables
+### First Run Setup
 
-Create a `.env` file with:
+The first time you run AUGR, it will guide you through setup:
 
-```env
-BRAINTRUST_API_KEY=your_braintrust_api_key_here
-# Optional: BRAINTRUST_BASE_URL=https://api.braintrust.dev/v1/proxy
+```bash
+augr
 ```
+
+AUGR will:
+1. Check for a Braintrust API key
+2. If none found, guide you to get one from https://www.braintrust.dev/app/settings/api-keys
+3. Save the key securely in `~/.augr/config.json`
+4. Start the interactive tool
+
+### Configuration
+
+AUGR checks for your API key in this order:
+1. `BRAINTRUST_API_KEY` environment variable
+2. `~/.augr/config.json` file
+3. Interactive setup (first time)
 
 ### Running
 
@@ -76,8 +88,22 @@ The tool provides an interactive CLI with two main modes:
 2. **Direct JSON Upload**: Upload pre-generated samples directly
 
 ```bash
-uv run python run_augr.py
+augr
 ```
+
+### Uninstalling
+
+To completely remove AUGR and all its configuration:
+
+```bash
+augr uninstall
+# or
+augr-uninstall
+```
+
+This will:
+- Remove `~/.augr/` directory and all configuration
+- Uninstall the AUGR package
 
 ### Development
 

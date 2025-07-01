@@ -129,10 +129,7 @@ jobs:
         ### 🔧 Usage
         
         \`\`\`bash
-        # Set your API key
-        export BRAINTRUST_API_KEY=your_key_here
-        
-        # Run the tool
+        # Just run the tool - it will guide you through setup
         augr
         \`\`\`
         EOF

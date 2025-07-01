@@ -5,10 +5,10 @@ Core AI interface for LLM interactions with structured outputs via Braintrust pr
 import os
 from typing import Any, Dict, List, Optional, Type, TypeVar
 
-from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+from .config import get_configured_api_key
 from .specify_model import specify_ai_model
 
 T = TypeVar('T', bound=BaseModel)
@@ -85,9 +85,10 @@ def create_ai(
     """
     Create an AI client configured to use Braintrust proxy with structured outputs.
     
-    Loads configuration from environment variables:
-    - BRAINTRUST_API_KEY: API key for Braintrust proxy
-    - BRAINTRUST_BASE_URL: Base URL (defaults to Braintrust proxy)
+    Gets API key from:
+    1. BRAINTRUST_API_KEY environment variable
+    2. ~/.augr/config.json file
+    3. Interactive setup (first time)
     
     Args:
         model: Model to use (defaults to gpt-4o)
@@ -96,26 +97,10 @@ def create_ai(
     Returns:
         AIClient instance with gen_obj method for structured outputs
     """
-    # Load environment variables from multiple possible locations
-    # Try loading from current directory first
-    load_dotenv()
-
-    # Also try loading from the project root (where this module is located)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)  # Go up one level from augr/ to project root
-    env_path = os.path.join(project_root, '.env')
-    if os.path.exists(env_path):
-        load_dotenv(env_path)
-
-    # Get configuration from environment
-    api_key = os.getenv("BRAINTRUST_API_KEY")
-    if not api_key:
-        # Provide more helpful error message
-        raise ValueError(
-            "BRAINTRUST_API_KEY environment variable is required. "
-            "Please set it in your environment or create a .env file with BRAINTRUST_API_KEY=your_key_here"
-        )
-
+    # Get API key using new configuration system
+    api_key = get_configured_api_key()
+    
+    # Get optional base URL from environment
     base_url = os.getenv("BRAINTRUST_BASE_URL", "https://api.braintrust.dev/v1/proxy")
 
     # Create AsyncOpenAI client configured for Braintrust proxy

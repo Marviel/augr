@@ -482,12 +482,54 @@ class DatasetAugmentationCLI:
 
 async def main_async():
     """Async main entry point for CLI"""
+    import sys
+    
+    # Check for help or uninstall commands
+    if len(sys.argv) > 1:
+        if sys.argv[1] in ["--help", "-h", "help"]:
+            print("🤖 AUGR - AI Dataset Augmentation Tool")
+            print("=" * 40)
+            print()
+            print("Usage:")
+            print("  augr              Start interactive augmentation tool")
+            print("  augr uninstall    Remove AUGR and all configuration")
+            print("  augr --help       Show this help message")
+            print()
+            print("On first run, AUGR will guide you through setting up your Braintrust API key.")
+            print("Visit: https://www.braintrust.dev/app/settings/api-keys")
+            return
+        elif sys.argv[1] == "uninstall":
+            from .uninstall import uninstall_augr
+            uninstall_augr()
+            return
+    
     cli = DatasetAugmentationCLI()
     await cli.run()
 
 
 def main():
     """Synchronous entry point for CLI (used by setuptools entry points)"""
+    import sys
+    
+    # Handle help and uninstall commands synchronously
+    if len(sys.argv) > 1:
+        if sys.argv[1] in ["--help", "-h", "help"]:
+            print("🤖 AUGR - AI Dataset Augmentation Tool")
+            print("=" * 40)
+            print()
+            print("Usage:")
+            print("  augr              Start interactive augmentation tool")
+            print("  augr uninstall    Remove AUGR and all configuration")
+            print("  augr --help       Show this help message")
+            print()
+            print("On first run, AUGR will guide you through setting up your Braintrust API key.")
+            print("Visit: https://www.braintrust.dev/app/settings/api-keys")
+            return
+        elif sys.argv[1] == "uninstall":
+            from .uninstall import uninstall_augr
+            uninstall_augr()
+            return
+    
     asyncio.run(main_async())
 
 

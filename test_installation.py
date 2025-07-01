@@ -37,18 +37,24 @@ def test_ai_client_import():
         print(f"❌ AI client import failed: {e}")
         return False
 
-def test_env_handling():
-    """Test environment variable handling"""
+def test_config_system():
+    """Test configuration system"""
     try:
         # Set a test API key
         os.environ['BRAINTRUST_API_KEY'] = 'test-key-12345'
-
-        from augr.ai_client import create_ai
-        ai_client = create_ai()
-        print("✅ Environment variable handling works")
-        return True
+        
+        from augr.config import AugrConfig
+        config = AugrConfig()
+        api_key = config.get_api_key()
+        
+        if api_key == 'test-key-12345':
+            print("✅ Configuration system works")
+            return True
+        else:
+            print(f"❌ Configuration system failed: got {api_key}")
+            return False
     except Exception as e:
-        print(f"❌ Environment handling failed: {e}")
+        print(f"❌ Configuration system failed: {e}")
         return False
     finally:
         # Clean up
@@ -80,7 +86,7 @@ def main():
         test_basic_import,
         test_cli_import,
         test_ai_client_import,
-        test_env_handling,
+        test_config_system,
         test_entry_point,
     ]
 
