@@ -1,82 +1,88 @@
 """
-Uninstall functionality for AUGR
+Uninstall utility for AUGR with multi-project configuration support.
 """
 
 import subprocess
 import sys
 from pathlib import Path
 
-from .config import remove_all_config
+from .config import cleanup_all_configs
 
 
-def uninstall_augr():
-    """Uninstall AUGR and remove all configuration"""
-    print("🗑️  AUGR Uninstall")
-    print("=" * 20)
+def main():
+    """Main uninstall function for AUGR"""
+    print("🗑️  AUGR Uninstaller")
+    print("=" * 30)
     print()
     
-    # Confirm with user
+    # Confirm uninstall
     print("This will:")
-    print("- Remove all AUGR configuration from ~/.augr/")
-    print("- Uninstall the AUGR package")
+    print("• Remove all AUGR projects and configurations (~/.augr/)")
+    print("• Uninstall the augr package")
     print()
     
-    response = input("Are you sure you want to uninstall AUGR? (y/N): ").strip().lower()
-    if response != 'y':
-        print("❌ Uninstall cancelled.")
-        return
-    
-    print()
-    print("🧹 Removing configuration...")
-    
-    # Remove config directory
-    config_removed = remove_all_config()
-    if config_removed:
-        print("✅ Removed ~/.augr/ directory")
-    else:
-        print("ℹ️  No ~/.augr/ directory found")
-    
-    print()
-    print("📦 Uninstalling package...")
-    
-    # Try different uninstall methods
     try:
-        # Try pip uninstall first
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "uninstall", "augr", "-y"],
-            capture_output=True,
-            text=True
-        )
+        confirm = input("Are you sure you want to uninstall AUGR? [y/N]: ").strip().lower()
         
-        if result.returncode == 0:
-            print("✅ Successfully uninstalled AUGR package")
-        else:
-            # Try uv uninstall as fallback
-            print("💡 Trying uv tool uninstall...")
+        if confirm not in ['y', 'yes']:
+            print("❌ Uninstall cancelled")
+            return
+        
+        success = True
+        
+        # Remove configuration files
+        print("\n🗂️  Removing configuration files...")
+        try:
+            if cleanup_all_configs():
+                print("✅ Configuration files removed")
+            else:
+                print("ℹ️  No configuration files found")
+        except Exception as e:
+            print(f"⚠️  Could not remove config files: {e}")
+            success = False
+        
+        # Uninstall package
+        print("\n📦 Uninstalling augr package...")
+        try:
+            # Try to get the installed package path for verification
+            try:
+                import augr
+                package_path = Path(augr.__file__).parent.parent
+                print(f"Found package at: {package_path}")
+            except Exception:
+                pass
+            
+            # Run pip uninstall
             result = subprocess.run(
-                ["uv", "tool", "uninstall", "augr"],
+                [sys.executable, "-m", "pip", "uninstall", "augr", "-y"],
                 capture_output=True,
                 text=True
             )
             
             if result.returncode == 0:
-                print("✅ Successfully uninstalled AUGR package with uv")
+                print("✅ Package uninstalled successfully")
             else:
-                print("⚠️  Could not automatically uninstall the package.")
-                print("Please manually run one of:")
-                print("   pip uninstall augr")
-                print("   uv tool uninstall augr")
-                print("   pipx uninstall augr")
-    
+                print(f"⚠️  Package uninstall had issues: {result.stderr}")
+                success = False
+                
+        except Exception as e:
+            print(f"❌ Failed to uninstall package: {e}")
+            success = False
+        
+        # Final message
+        print("\n" + "=" * 30)
+        if success:
+            print("✅ AUGR has been completely removed from your system")
+            print("Thank you for using AUGR!")
+        else:
+            print("⚠️  Uninstall completed with some issues")
+            print("You may need to manually remove remaining files")
+        
+    except KeyboardInterrupt:
+        print("\n❌ Uninstall cancelled by user")
     except Exception as e:
-        print(f"⚠️  Error during uninstall: {e}")
-        print("Please manually run: pip uninstall augr")
-    
-    print()
-    print("👋 AUGR has been uninstalled.")
-    print("Thanks for using AUGR! If you reinstall, you'll need to set up your API key again.")
+        print(f"\n❌ Unexpected error during uninstall: {e}")
 
 
-def main():
-    """Entry point for uninstall command"""
-    uninstall_augr() 
+if __name__ == "__main__":
+    main() 

@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Type, TypeVar
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from .config import get_configured_api_key
 from .specify_model import specify_ai_model
 
 T = TypeVar('T', bound=BaseModel)
@@ -25,7 +24,6 @@ class AIClient:
         self,
         schema: Type[T],
         messages: List[Dict[str, Any]],
-        thinking_enabled: Optional[bool] = False,
         temperature: Optional[float] = None
     ) -> T:
         """
@@ -34,7 +32,6 @@ class AIClient:
         Args:
             schema: Pydantic model class to structure the response
             messages: List of message dictionaries for the conversation
-            thinking_enabled: Whether to enable thinking mode (for reasoning models)
             temperature: Temperature for the model (defaults to what was set in create_ai)
             
         Returns:
@@ -52,12 +49,6 @@ class AIClient:
             call_params["temperature"] = temperature
         else:
             call_params["temperature"] = self.temperature
-
-        # Add thinking/reasoning parameters if enabled
-        if thinking_enabled:
-            # For reasoning models, we can add reasoning parameters
-            # This is compatible with Braintrust proxy's reasoning support
-            call_params["reasoning_enabled"] = True
 
         try:
             # Use OpenAI's structured output parsing
@@ -80,25 +71,28 @@ class AIClient:
 
 def create_ai(
     model: str = "gpt-4o",
-    temperature: float = 0.0
+    temperature: float = 0.0,
+    braintrust_api_key: Optional[str] = None
 ) -> AIClient:
     """
     Create an AI client configured to use Braintrust proxy with structured outputs.
     
-    Gets API key from:
-    1. BRAINTRUST_API_KEY environment variable
-    2. ~/.augr/config.json file
-    3. Interactive setup (first time)
-    
     Args:
         model: Model to use (defaults to gpt-4o)
         temperature: Temperature for model responses
+        braintrust_api_key: Braintrust API key (if not provided, tries environment variable)
         
     Returns:
         AIClient instance with gen_obj method for structured outputs
+        
+    Raises:
+        Exception: If no API key can be obtained
     """
-    # Get API key using new configuration system
-    api_key = get_configured_api_key()
+    # Get API key from parameter or environment
+    api_key = braintrust_api_key or os.getenv("BRAINTRUST_API_KEY")
+    
+    if not api_key:
+        raise Exception("Braintrust API key is required. Provide it as a parameter or set BRAINTRUST_API_KEY environment variable.")
     
     # Get optional base URL from environment
     base_url = os.getenv("BRAINTRUST_BASE_URL", "https://api.braintrust.dev/v1/proxy")

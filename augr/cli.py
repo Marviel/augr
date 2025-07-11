@@ -1,9 +1,11 @@
 """
-Enhanced CLI interface for dataset augmentation with iterative workflows.
+Enhanced CLI interface for dataset augmentation with iterative workflows and multi-project support.
 """
 
+import argparse
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -16,24 +18,23 @@ except ImportError:
 
 from .augmentation_service import DatasetAugmentationService
 from .braintrust_client import BraintrustClient
+from .config import get_project_api_key, select_or_create_project
 from .models import CaseAbstract, DatasetSample, GeneratedSample
 
 
 class DatasetAugmentationCLI:
-    """Enhanced CLI for dataset augmentation with multiple workflows"""
+    """Enhanced CLI for dataset augmentation with multiple workflows and projects"""
 
-    def __init__(self):
+    def __init__(self, project_name: str):
+        self.project_name = project_name
         self.service: Optional[DatasetAugmentationService] = None
         self.braintrust_client: Optional[BraintrustClient] = None
 
     def _setup_service(self) -> bool:
-        """Initialize the service with API keys"""
+        """Initialize the service with API keys for the selected project"""
         try:
-            from .config import get_configured_api_key
-            
-            # Get API key using the new configuration system
-            # This will handle interactive setup if needed
-            braintrust_api_key = get_configured_api_key()
+            # Get API key for the specific project
+            braintrust_api_key = get_project_api_key(self.project_name)
             
             # Initialize services
             self.service = DatasetAugmentationService(braintrust_api_key)
@@ -41,13 +42,15 @@ class DatasetAugmentationCLI:
             return True
             
         except Exception as e:
-            print(f"❌ Failed to set up AUGR: {e}")
+            print(f"❌ Failed to set up project '{self.project_name}': {e}")
             return False
 
     async def run(self):
         """Main CLI application entry point"""
         print("🧠 Dataset Augmentation CLI Tool")
         print("=" * 50)
+        print(f"📂 Project: {self.project_name}")
+        print()
 
         if not self._setup_service():
             return
@@ -171,15 +174,17 @@ class DatasetAugmentationCLI:
         if not case_abstracts:
             return
 
-        # Generate samples for approved abstracts
-        generated_samples = await self._generate_samples_with_review(
-            case_abstracts, samples, schema
+        # Generate samples for approved abstracts with immediate upload
+        uploaded_count = await self._generate_samples_with_review(
+            case_abstracts, samples, schema, dataset_id
         )
-        if not generated_samples:
-            return
-
-        # Final confirmation and upload
-        await self._finalize_samples(dataset_id, generated_samples)
+        
+        if uploaded_count == 0:
+            print("❌ No samples were approved and uploaded")
+        else:
+            print(f"\n🎉 Dataset Augmentation Complete!")
+            print(f"   • Dataset ID: {dataset_id}")
+            print(f"   • Samples uploaded: {uploaded_count}")
 
     async def _get_dataset_id(self) -> Optional[str]:
         """Get dataset ID from user with optional dataset listing"""
@@ -329,28 +334,52 @@ class DatasetAugmentationCLI:
         self,
         case_abstracts: List[CaseAbstract],
         reference_samples: List[DatasetSample],
-        schema
-    ) -> Optional[List[GeneratedSample]]:
-        """Generate samples with individual review and variation options"""
+        schema,
+        dataset_id: str
+    ) -> int:
+        """Generate samples with individual review and immediate upload to Braintrust"""
         print(f"\n🏭 Generating {len(case_abstracts)} samples...")
+        print(f"💡 Approved samples will be immediately uploaded to dataset: {dataset_id}")
+        print(f"⚡ Pre-generating next sample while you review for faster workflow!")
 
-        approved_samples = []
+        uploaded_count = 0
+        exported_samples = []  # Keep track for potential export
 
-        for i, abstract in enumerate(case_abstracts, 1):
-            print(f"\n📝 Generating sample {i}/{len(case_abstracts)}: {abstract.title}")
+        # Generate first sample
+        if not case_abstracts:
+            return 0
 
-            try:
-                current_sample = await self.service.generate_sample_for_case_abstract(
-                    abstract, reference_samples, schema
+        print(f"\n📝 Generating sample 1/{len(case_abstracts)}: {case_abstracts[0].title}")
+        try:
+            current_sample = await self.service.generate_sample_for_case_abstract(
+                case_abstracts[0], reference_samples, schema
+            )
+            print(f"✅ Generated sample for: {case_abstracts[0].title}")
+        except Exception as e:
+            print(f"❌ Failed to generate sample for '{case_abstracts[0].title}': {e}")
+            return uploaded_count
+
+        # Process samples with pre-generation
+        for i, abstract in enumerate(case_abstracts):
+            next_sample_task = None
+            
+            # Start generating next sample in background (if there is one)
+            if i + 1 < len(case_abstracts):
+                next_abstract = case_abstracts[i + 1]
+                print(f"🔄 Pre-generating next sample: {next_abstract.title}")
+                next_sample_task = asyncio.create_task(
+                    self.service.generate_sample_for_case_abstract(
+                        next_abstract, reference_samples, schema
+                    )
                 )
-                print(f"✅ Generated sample for: {abstract.title}")
-            except Exception as e:
-                print(f"❌ Failed to generate sample for '{abstract.title}': {e}")
-                continue
+                # Give the task a chance to start before the blocking prompt
+                # Note: inquirer.prompt() blocks the event loop, so background task
+                # will pause during user input but can resume between prompts
+                await asyncio.sleep(0.5)
 
             # Review loop for this sample
             while True:
-                print(f"\n👀 Review Sample {i}: {abstract.title}")
+                print(f"\n👀 Review Sample {i + 1}/{len(case_abstracts)}: {abstract.title}")
                 print("-" * 40)
                 print(f"Input: {json.dumps(current_sample.input, indent=2)}")
                 print(f"Expected: {json.dumps(current_sample.expected, indent=2)}")
@@ -362,18 +391,48 @@ class DatasetAugmentationCLI:
                         'action',
                         message="What would you like to do with this sample?",
                         choices=[
-                            ('✅ Accept this sample', 'accept'),
+                            ('✅ Accept and upload to Braintrust', 'accept'),
                             ('🔄 Request a variation', 'variation'),
                             ('⏭️  Skip this sample', 'skip'),
-                            ('📁 Export all samples to JSON and exit', 'export'),
+                            ('📁 Export generated samples to JSON and exit', 'export'),
                         ],
                     )
                 ]
                 answers = inquirer.prompt(questions)
 
                 if answers['action'] == 'accept':
-                    approved_samples.append(current_sample)
-                    break
+                    # Immediately upload to Braintrust
+                    try:
+                        print(f"📤 Uploading sample to dataset...")
+                        await self.service.braintrust_client.insert_samples(dataset_id, [current_sample])
+                        uploaded_count += 1
+                        exported_samples.append(current_sample)  # Keep for potential export
+                        print(f"✅ Sample uploaded successfully! (Total uploaded: {uploaded_count})")
+                        break
+                    except Exception as e:
+                        print(f"❌ Failed to upload sample: {e}")
+                        # Ask user what to do
+                        questions = [
+                            inquirer.List(
+                                'retry_action',
+                                message="Upload failed. What would you like to do?",
+                                choices=[
+                                    ('🔄 Try uploading again', 'retry'),
+                                    ('💾 Save for later export', 'save'),
+                                    ('⏭️  Skip this sample', 'skip'),
+                                ],
+                            )
+                        ]
+                        retry_answers = inquirer.prompt(questions)
+                        
+                        if retry_answers['retry_action'] == 'retry':
+                            continue  # Stay in the loop to try upload again
+                        elif retry_answers['retry_action'] == 'save':
+                            exported_samples.append(current_sample)
+                            print("💾 Sample saved for potential export")
+                            break
+                        else:  # skip
+                            break
                 elif answers['action'] == 'variation':
                     questions = [
                         inquirer.Text(
@@ -381,8 +440,8 @@ class DatasetAugmentationCLI:
                             message="What variation would you like? (e.g., 'make it more complex', 'use different data', 'add edge case')"
                         )
                     ]
-                    answers = inquirer.prompt(questions)
-                    variation_request = answers['variation_request']
+                    variation_answers = inquirer.prompt(questions)
+                    variation_request = variation_answers['variation_request']
 
                     if not variation_request.strip():
                         print("⚠️  No variation request provided, keeping current sample")
@@ -401,11 +460,36 @@ class DatasetAugmentationCLI:
                     print(f"⏭️  Skipped sample: {abstract.title}")
                     break
                 elif answers['action'] == 'export':
-                    all_samples = approved_samples + [current_sample]
+                    # Cancel the background task if user wants to exit
+                    if next_sample_task and not next_sample_task.done():
+                        next_sample_task.cancel()
+                        print("🛑 Cancelled background generation")
+                    
+                    # Include current sample if user wants to export
+                    all_samples = exported_samples + [current_sample]
                     await self._export_to_json(all_samples)
-                    return None
+                    print(f"📊 Session summary: {uploaded_count} samples uploaded, {len(all_samples)} samples exported")
+                    return uploaded_count
+            
+            # Prepare for next iteration - get the pre-generated sample
+            if next_sample_task:
+                try:
+                    if next_sample_task.done():
+                        print(f"⚡ Next sample already ready!")
+                        current_sample = await next_sample_task
+                    else:
+                        print(f"⏳ Waiting for pre-generation to complete...")
+                        current_sample = await next_sample_task
+                        print(f"✅ Generation complete!")
+                    print(f"📋 Next sample: {case_abstracts[i + 1].title}")
+                except Exception as e:
+                    print(f"❌ Failed to generate next sample '{case_abstracts[i + 1].title}': {e}")
+                    # If we can't get the next sample, we'll break out of the loop
+                    break
 
-        return approved_samples
+        print(f"\n📊 Sample generation complete!")
+        print(f"   • Total samples uploaded: {uploaded_count}")
+        return uploaded_count
 
     async def _export_to_json(self, samples: List[GeneratedSample]):
         """Export samples to JSON file"""
@@ -437,98 +521,81 @@ class DatasetAugmentationCLI:
         except Exception as e:
             print(f"❌ Failed to export samples: {e}")
 
-    async def _finalize_samples(self, dataset_id: str, samples: List[GeneratedSample]):
-        """Final confirmation and upload of approved samples"""
-        if not samples:
-            print("❌ No samples to upload")
-            return
 
-        print("\n🎯 Final Review")
-        print("=" * 15)
-        print(f"Dataset ID: {dataset_id}")
-        print(f"Samples to upload: {len(samples)}")
-
-        questions = [
-            inquirer.List(
-                'final_action',
-                message="Ready to upload samples to dataset?",
-                choices=[
-                    ('✅ Upload to dataset', 'upload'),
-                    ('📁 Export to JSON file instead', 'export'),
-                    ('❌ Cancel', 'cancel'),
-                ],
-            )
-        ]
-        answers = inquirer.prompt(questions)
-
-        if answers['final_action'] == 'upload':
-            try:
-                print(f"\n📤 Uploading {len(samples)} samples to dataset...")
-                await self.service.braintrust_client.insert_samples(dataset_id, samples)
-                print("✅ Successfully uploaded samples to dataset!")
-
-                print("\n🎉 Dataset Augmentation Complete!")
-                print(f"   • Dataset ID: {dataset_id}")
-                print(f"   • New samples created: {len(samples)}")
-
-            except Exception as e:
-                print(f"❌ Failed to upload samples: {e}")
-                print("💡 You may want to export to JSON as backup")
-        elif answers['final_action'] == 'export':
-            await self._export_to_json(samples)
-        else:
-            print("❌ Operation cancelled")
 
 
 async def main_async():
-    """Async main entry point for CLI"""
-    import sys
+    """Main async entry point with project selection"""
+    parser = argparse.ArgumentParser(
+        description="AUGR - AI-powered dataset augmentation tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  augr                    # Use existing project or create default
+  augr -p myproject       # Create new project 'myproject'
+  augr --help            # Show this help message
+  augr uninstall         # Remove AUGR and all projects
+
+Projects allow you to organize different datasets and API configurations.
+Each project maintains its own Braintrust API key and settings.
+
+For more information, visit: https://github.com/Marviel/augr
+        """
+    )
     
-    # Check for help or uninstall commands
-    if len(sys.argv) > 1:
-        if sys.argv[1] in ["--help", "-h", "help"]:
-            print("🤖 AUGR - AI Dataset Augmentation Tool")
-            print("=" * 40)
-            print()
-            print("Usage:")
-            print("  augr              Start interactive augmentation tool")
-            print("  augr uninstall    Remove AUGR and all configuration")
-            print("  augr --help       Show this help message")
-            print()
-            print("On first run, AUGR will guide you through setting up your Braintrust API key.")
-            print("Visit: https://www.braintrust.dev/app/settings/api-keys")
-            return
-        elif sys.argv[1] == "uninstall":
-            from .uninstall import uninstall_augr
-            uninstall_augr()
-            return
+    parser.add_argument(
+        "-p", "--project",
+        help="Create a new project with the given name",
+        metavar="PROJECT_NAME"
+    )
     
-    cli = DatasetAugmentationCLI()
-    await cli.run()
+    # Handle special case: if only --help or -h, show help and exit
+    if len(sys.argv) == 2 and sys.argv[1] in ['-h', '--help']:
+        parser.print_help()
+        return
+    
+    try:
+        args = parser.parse_args()
+        
+        # Project selection logic
+        if args.project:
+            # Create new project
+            try:
+                project_name = select_or_create_project(create_new=True, new_project_name=args.project)
+                print(f"✅ Creating new project: {project_name}")
+            except Exception as e:
+                print(f"❌ {e}")
+                return
+        else:
+            # Select existing project or create default
+            try:
+                project_name = select_or_create_project(create_new=False)
+            except Exception as e:
+                print(f"❌ {e}")
+                return
+        
+        # Run the CLI with the selected project
+        cli = DatasetAugmentationCLI(project_name)
+        await cli.run()
+        
+    except KeyboardInterrupt:
+        print("\n❌ Operation cancelled by user")
+    except SystemExit:
+        # This happens when argparse encounters --help or invalid args
+        pass
 
 
 def main():
-    """Synchronous entry point for CLI (used by setuptools entry points)"""
-    import sys
-    
-    # Handle help and uninstall commands synchronously
+    """Main entry point"""
+    # Handle special commands that don't require async
     if len(sys.argv) > 1:
-        if sys.argv[1] in ["--help", "-h", "help"]:
-            print("🤖 AUGR - AI Dataset Augmentation Tool")
-            print("=" * 40)
-            print()
-            print("Usage:")
-            print("  augr              Start interactive augmentation tool")
-            print("  augr uninstall    Remove AUGR and all configuration")
-            print("  augr --help       Show this help message")
-            print()
-            print("On first run, AUGR will guide you through setting up your Braintrust API key.")
-            print("Visit: https://www.braintrust.dev/app/settings/api-keys")
+        if sys.argv[1] == "uninstall":
+            from .uninstall import main as uninstall_main
+            uninstall_main()
             return
-        elif sys.argv[1] == "uninstall":
-            from .uninstall import uninstall_augr
-            uninstall_augr()
-            return
+        elif sys.argv[1] in ["--help", "-h"]:
+            # Let argparse handle this in main_async
+            pass
     
     asyncio.run(main_async())
 

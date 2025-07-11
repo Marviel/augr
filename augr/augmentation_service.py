@@ -28,7 +28,8 @@ class DatasetAugmentationService:
         self.braintrust_client = BraintrustClient(braintrust_api_key)
         self.ai = create_ai(
             model=DEFAULT_MODEL,
-            temperature=0.0
+            temperature=0.0,
+            braintrust_api_key=braintrust_api_key
         )
 
     async def analyze_dataset_gaps(self, samples: List[DatasetSample]) -> GapAnalysisResult:
@@ -86,7 +87,6 @@ Return your analysis as JSON matching this exact structure:
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
-                thinking_enabled=True
             )
 
             return response
@@ -336,7 +336,6 @@ Return as JSON:
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
-                thinking_enabled=True
             )
 
             generated_sample = response
