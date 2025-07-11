@@ -112,10 +112,21 @@ async def legacy_workflow():
             print(f"❌ Failed to fetch samples: {e}")
             return
 
+        # Step 3.5: Fetch dataset metadata
+        print(f"\n📊 Fetching dataset information...")
+        try:
+            dataset_metadata = await service.braintrust_client.get_dataset_info(dataset_id)
+            print(f"✅ Dataset info retrieved: {dataset_metadata.get('name', 'Unnamed')}")
+            if dataset_metadata.get('description'):
+                print(f"   📝 Description: {dataset_metadata['description']}")
+        except Exception as e:
+            print(f"⚠️  Could not fetch dataset metadata: {e}")
+            dataset_metadata = None
+
         # Step 4: Analyze gaps (legacy method)
         print(f"\n🔍 Analyzing dataset gaps with {DEFAULT_MODEL}...")
         try:
-            gap_analysis = await service.analyze_dataset_gaps(samples)
+            gap_analysis = await service.analyze_dataset_gaps(samples, dataset_metadata)
             print("✅ Gap analysis complete")
         except Exception as e:
             print(f"❌ Failed to analyze gaps: {e}")
@@ -151,7 +162,7 @@ async def legacy_workflow():
         # Step 6: Infer dataset schema (Phase 1)
         print("\n🔍 Analyzing dataset schema for precise generation...")
         try:
-            schema = await service.infer_dataset_schema(samples)
+            schema = await service.infer_dataset_schema(samples, dataset_metadata)
             print("✅ Schema analysis complete")
             print(f"   📋 Input Schema: {len(schema.input_schema.get('properties', {}))} properties")
             print(f"   📋 Expected Schema: {len(schema.expected_schema.get('properties', {}))} properties")
@@ -168,7 +179,7 @@ async def legacy_workflow():
         for suggestion in selected_suggestions:
             try:
                 print(f"  📝 Generating sample for: {suggestion.title}")
-                sample = await service.generate_sample_for_suggestion(suggestion, samples, schema)
+                sample = await service.generate_sample_for_suggestion(suggestion, samples, schema, dataset_metadata)
                 generated_samples.append(sample)
                 print(f"  ✅ Generated: {suggestion.title}")
             except Exception as e:

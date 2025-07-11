@@ -7,7 +7,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Any
 
 # Interactive CLI components
 try:
@@ -156,27 +156,38 @@ class DatasetAugmentationCLI:
         if not dataset_id:
             return
 
+        # Fetch dataset metadata
+        print(f"\n📊 Fetching dataset information...")
+        try:
+            dataset_metadata = await self.braintrust_client.get_dataset_info(dataset_id)
+            print(f"✅ Dataset info retrieved: {dataset_metadata.get('name', 'Unnamed')}")
+            if dataset_metadata.get('description'):
+                print(f"   📝 Description: {dataset_metadata['description']}")
+        except Exception as e:
+            print(f"⚠️  Could not fetch dataset metadata: {e}")
+            dataset_metadata = None
+
         samples = await self._fetch_samples(dataset_id)
         if not samples:
             return
 
-        # Infer schema first
+        # Infer schema first (with dataset metadata)
         print("\n🔍 Analyzing dataset schema...")
         try:
-            schema = await self.service.infer_dataset_schema(samples)
+            schema = await self.service.infer_dataset_schema(samples, dataset_metadata)
             print("✅ Schema analysis complete")
         except Exception as e:
             print(f"❌ Failed to analyze schema: {e}")
             return
 
-        # Get user guidance and generate case abstracts iteratively
-        case_abstracts = await self._get_case_abstracts_iteratively(samples)
+        # Get user guidance and generate case abstracts iteratively (with dataset metadata)
+        case_abstracts = await self._get_case_abstracts_iteratively(samples, dataset_metadata)
         if not case_abstracts:
             return
 
-        # Generate samples for approved abstracts with immediate upload
+        # Generate samples for approved abstracts with immediate upload (with dataset metadata)
         uploaded_count = await self._generate_samples_with_review(
-            case_abstracts, samples, schema, dataset_id
+            case_abstracts, samples, schema, dataset_id, dataset_metadata
         )
         
         if uploaded_count == 0:
@@ -288,7 +299,7 @@ class DatasetAugmentationCLI:
             print(f"❌ Failed to fetch samples: {e}")
             return None
 
-    async def _get_case_abstracts_iteratively(self, samples: List[DatasetSample]) -> Optional[List[CaseAbstract]]:
+    async def _get_case_abstracts_iteratively(self, samples: List[DatasetSample], dataset_metadata: Optional[Dict[str, Any]]) -> Optional[List[CaseAbstract]]:
         """Iteratively refine case abstracts based on user guidance"""
         print("\n💡 Test Case Generation")
         print("=" * 25)
@@ -313,7 +324,7 @@ class DatasetAugmentationCLI:
             print("\n🔍 Generating case abstracts based on your guidance...")
             try:
                 case_abstract_list = await self.service.generate_case_abstracts_with_guidance(
-                    samples, user_guidance, feedback
+                    samples, user_guidance, feedback, dataset_metadata
                 )
                 print("✅ Case abstracts generated")
             except Exception as e:
@@ -371,7 +382,8 @@ class DatasetAugmentationCLI:
         case_abstracts: List[CaseAbstract],
         reference_samples: List[DatasetSample],
         schema,
-        dataset_id: str
+        dataset_id: str,
+        dataset_metadata: Optional[Dict[str, Any]]
     ) -> int:
         """Generate samples with individual review and immediate upload to Braintrust"""
         print(f"\n🏭 Generating {len(case_abstracts)} samples...")
@@ -388,7 +400,7 @@ class DatasetAugmentationCLI:
         print(f"\n📝 Generating sample 1/{len(case_abstracts)}: {case_abstracts[0].title}")
         try:
             current_sample = await self.service.generate_sample_for_case_abstract(
-                case_abstracts[0], reference_samples, schema
+                case_abstracts[0], reference_samples, schema, dataset_metadata
             )
             print(f"✅ Generated sample for: {case_abstracts[0].title}")
         except Exception as e:
@@ -405,7 +417,7 @@ class DatasetAugmentationCLI:
                 print(f"🔄 Pre-generating next sample: {next_abstract.title}")
                 next_sample_task = asyncio.create_task(
                     self.service.generate_sample_for_case_abstract(
-                        next_abstract, reference_samples, schema
+                        next_abstract, reference_samples, schema, dataset_metadata
                     )
                 )
                 # Give the task a chance to start before the blocking prompt
@@ -486,7 +498,7 @@ class DatasetAugmentationCLI:
                     print(f"🔄 Generating variation: {variation_request}")
                     try:
                         current_sample = await self.service.generate_sample_variation(
-                            current_sample, abstract, variation_request, schema
+                            current_sample, abstract, variation_request, schema, dataset_metadata
                         )
                         print("✅ Variation generated")
                     except Exception as e:

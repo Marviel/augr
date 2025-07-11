@@ -3,7 +3,7 @@ Service for LLM-based dataset augmentation with iterative refinement capabilitie
 """
 
 import json
-from typing import List
+from typing import List, Dict, Any
 
 from .ai_client import create_ai
 from .braintrust_client import BraintrustClient
@@ -32,7 +32,7 @@ class DatasetAugmentationService:
             braintrust_api_key=braintrust_api_key
         )
 
-    async def analyze_dataset_gaps(self, samples: List[DatasetSample]) -> GapAnalysisResult:
+    async def analyze_dataset_gaps(self, samples: List[DatasetSample], dataset_metadata: Dict[str, Any] = None) -> GapAnalysisResult:
         """Analyze dataset samples and identify gaps (legacy method for backward compatibility)"""
 
         # Prepare sample data for analysis
@@ -45,41 +45,53 @@ class DatasetAugmentationService:
                 "metadata": sample.metadata
             })
 
+        # Format dataset metadata for AI context
+        dataset_context = ""
+        if dataset_metadata:
+            dataset_context = f"""
+            <DatasetMetadata description="The dataset metadata">
+            {json.dumps(dataset_metadata, indent=2)}
+            </DatasetMetadata>
+            """
+
         prompt = f"""You are an expert AI trainer analyzing a dataset to identify gaps in test coverage.
 
-DATASET SAMPLES TO ANALYZE:
-{json.dumps(sample_data, indent=2)}
+        {dataset_context}
 
-TOTAL SAMPLES IN DATASET: {len(samples)}
+        DATASET SAMPLES TO ANALYZE:
+        {json.dumps(sample_data, indent=2)}
 
-Your task is to identify exactly 5 high-level gaps in test coverage that would be valuable to fill with synthetic data.
+        TOTAL SAMPLES IN DATASET: {len(samples)}
 
-Consider:
-1. Edge cases that aren't covered
-2. Error conditions that might not be tested
-3. Boundary conditions
-4. Different input formats/structures not represented
-5. Logical variations in processing paths
+        Your task is to identify exactly 5 high-level gaps in test coverage that would be valuable to fill with synthetic data.
 
-Focus on gaps that would genuinely improve the robustness and coverage of this dataset.
+        Consider:
+        1. Edge cases that aren't covered
+        2. Error conditions that might not be tested
+        3. Boundary conditions
+        4. Different input formats/structures not represented
+        5. Logical variations in processing paths
 
-You must respond with exactly 5 suggestions. Each suggestion should be:
-- Actionable (can generate a concrete test case)
-- Different from existing samples
-- Valuable for improving dataset coverage
-- Feasible to implement synthetically
+        Focus on gaps that would genuinely improve the robustness and coverage of this dataset.
 
-Return your analysis as JSON matching this exact structure:
-{{
-    "suggestions": [
+        You must respond with exactly 5 suggestions. Each suggestion should be:
+        - Actionable (can generate a concrete test case)
+        - Different from existing samples
+        - Valuable for improving dataset coverage
+        - Feasible to implement synthetically
+
+        Return your analysis as JSON matching this exact structure:
         {{
-            "title": "Short descriptive title",
-            "description": "Detailed description of what this gap covers",
-            "rationale": "Why this gap is important to fill"
+            "suggestions": [
+                {{
+                    "title": "Short descriptive title",
+                    "description": "Detailed description of what this gap covers",
+                    "rationale": "Why this gap is important to fill"
+                }}
+            ],
+            "overall_assessment": "Brief assessment of current dataset coverage and main gaps"
         }}
-    ],
-    "overall_assessment": "Brief assessment of current dataset coverage and main gaps"
-}}"""
+        """
 
         try:
             response = await self.ai.gen_obj(
@@ -97,7 +109,8 @@ Return your analysis as JSON matching this exact structure:
         self,
         samples: List[DatasetSample],
         user_guidance: str,
-        previous_feedback: str = ""
+        previous_feedback: str = "",
+        dataset_metadata: Dict[str, Any] = None
     ) -> CaseAbstractList:
         """Generate case abstracts based on user guidance and optional feedback"""
 
@@ -111,6 +124,15 @@ Return your analysis as JSON matching this exact structure:
                 "metadata": sample.metadata
             })
 
+        # Format dataset metadata for AI context
+        dataset_context = ""
+        if dataset_metadata:
+            dataset_context = f"""
+            <DatasetMetadata description="The dataset metadata">
+            {json.dumps(dataset_metadata, indent=2)}
+            </DatasetMetadata>
+            """
+
         feedback_section = ""
         if previous_feedback:
             feedback_section = f"""
@@ -121,6 +143,8 @@ Please incorporate this feedback into your new suggestions.
 """
 
         prompt = f"""You are an expert AI trainer helping to generate test case abstracts for dataset augmentation.
+
+{dataset_context}
 
 DATASET SAMPLES FOR CONTEXT:
 {json.dumps(sample_data, indent=2)}
@@ -171,7 +195,7 @@ Return your response as JSON matching this exact structure:
         except Exception as e:
             raise Exception(f"Failed to generate case abstracts: {str(e)}")
 
-    async def infer_dataset_schema(self, reference_samples: List[DatasetSample]) -> InferredSchema:
+    async def infer_dataset_schema(self, reference_samples: List[DatasetSample], dataset_metadata: Dict[str, Any] = None) -> InferredSchema:
         """Analyze dataset samples and infer precise JSON Schema for each field (Phase 1)"""
 
         # Prepare sample data for analysis
@@ -184,7 +208,18 @@ Return your response as JSON matching this exact structure:
                 "metadata": sample.metadata
             })
 
+        # Format dataset metadata for AI context
+        dataset_context = ""
+        if dataset_metadata:
+            dataset_context = f"""
+            <DatasetMetadata description="The dataset metadata">
+            {json.dumps(dataset_metadata, indent=2)}
+            </DatasetMetadata>
+            """
+
         prompt = f"""You are a JSON Schema expert. Analyze these dataset samples and create precise JSON Schema objects for the input, expected, and metadata fields.
+
+{dataset_context}
 
 CRITICAL RULES:
 1. Document ONLY what you observe - no guessing or extrapolation
@@ -223,7 +258,8 @@ Remember: Be ruthlessly precise. Only document what you actually see in the data
         self,
         case_abstract: CaseAbstract,
         reference_samples: List[DatasetSample],
-        schema: InferredSchema
+        schema: InferredSchema,
+        dataset_metadata: Dict[str, Any] = None
     ) -> GeneratedSample:
         """Generate a specific sample based on a case abstract using documented schema (Phase 2)"""
 
@@ -237,39 +273,51 @@ Remember: Be ruthlessly precise. Only document what you actually see in the data
                 "metadata": sample.metadata
             })
 
+        # Format dataset metadata for AI context
+        dataset_context = ""
+        if dataset_metadata:
+            dataset_context = f"""
+            <DatasetMetadata description="The dataset metadata">
+            {json.dumps(dataset_metadata, indent=2)}
+            </DatasetMetadata>
+            """
+
         prompt = f"""You are generating a dataset sample that must EXACTLY match the documented JSON Schema.
 
-CASE ABSTRACT TO IMPLEMENT:
-Title: {case_abstract.title}
-Description: {case_abstract.description}
-Expected Input: {case_abstract.expected_input_characteristics}
-Expected Output: {case_abstract.expected_output_characteristics}
+        {dataset_context}
 
-REFERENCE SAMPLES FOR CONTEXT:
-{json.dumps(reference_context, indent=2)}
+        CASE ABSTRACT TO IMPLEMENT:
+        Title: {case_abstract.title}
+        Description: {case_abstract.description}
+        Expected Input: {case_abstract.expected_input_characteristics}
+        Expected Output: {case_abstract.expected_output_characteristics}
 
-DOCUMENTED JSON SCHEMAS (MUST FOLLOW EXACTLY):
-Input Schema: {json.dumps(schema.input_schema)}
-Expected Schema: {json.dumps(schema.expected_schema)}
-Metadata Schema: {json.dumps(schema.metadata_schema)}
+        REFERENCE SAMPLES FOR CONTEXT:
+        {json.dumps(reference_context, indent=2)}
 
-OBSERVED PATTERNS: {schema.observed_patterns}
-FIELD RELATIONSHIPS: {schema.field_relationships}
+        DOCUMENTED JSON SCHEMAS (MUST FOLLOW EXACTLY):
+        Input Schema: {json.dumps(schema.input_schema)}
+        Expected Schema: {json.dumps(schema.expected_schema)}
+        Metadata Schema: {json.dumps(schema.metadata_schema)}
 
-Generate ONE sample that:
-1. Implements the case abstract scenario
-2. EXACTLY matches all three JSON schemas
-3. Includes a test_name in metadata (REQUIRED)
-4. Creates realistic, coherent input/expected data
+        OBSERVED PATTERNS: {schema.observed_patterns}
+        FIELD RELATIONSHIPS: {schema.field_relationships}
 
-Validate your response against the schemas before returning.
+        Generate ONE sample that:
+        1. Implements the case abstract scenario
+        2. EXACTLY matches all three JSON schemas
+        3. Includes a test_name in metadata (REQUIRED)
+        4. Creates realistic, coherent input/expected data
 
-Return as JSON:
-{{
-    "input": /* Must match input_schema exactly */,
-    "expected": /* Must match expected_schema exactly */,
-    "metadata": {{ /* Must match metadata_schema exactly and include test_name */ }}
-}}"""
+        Validate your response against the schemas before returning.
+
+        Return as JSON:
+        {{
+            "input": /* Must match input_schema exactly */,
+            "expected": /* Must match expected_schema exactly */,
+            "metadata": {{ /* Must match metadata_schema exactly and include test_name */ }}
+        }}
+        """
 
         try:
             response = await self.ai.gen_obj(
@@ -294,41 +342,54 @@ Return as JSON:
         original_sample: GeneratedSample,
         case_abstract: CaseAbstract,
         variation_request: str,
-        schema: InferredSchema
+        schema: InferredSchema,
+        dataset_metadata: Dict[str, Any] = None
     ) -> GeneratedSample:
         """Generate a variation of an existing sample based on user request"""
 
+        # Format dataset metadata for AI context
+        dataset_context = ""
+        if dataset_metadata:
+            dataset_context = f"""
+            <DatasetMetadata description="The dataset metadata">
+            {json.dumps(dataset_metadata, indent=2)}
+            </DatasetMetadata>
+            """
+
         prompt = f"""You are generating a variation of an existing dataset sample.
 
-ORIGINAL SAMPLE:
-Input: {json.dumps(original_sample.input)}
-Expected: {json.dumps(original_sample.expected)}
-Metadata: {json.dumps(original_sample.metadata)}
+        {dataset_context}
 
-ORIGINAL CASE ABSTRACT:
-{case_abstract.description}
+        ORIGINAL SAMPLE:
+        Input: {json.dumps(original_sample.input)}
+        Expected: {json.dumps(original_sample.expected)}
+        Metadata: {json.dumps(original_sample.metadata)}
 
-USER'S VARIATION REQUEST:
-{variation_request}
+        ORIGINAL CASE ABSTRACT:
+        {case_abstract.description}
 
-DOCUMENTED JSON SCHEMAS (MUST FOLLOW EXACTLY):
-Input Schema: {json.dumps(schema.input_schema)}
-Expected Schema: {json.dumps(schema.expected_schema)}
-Metadata Schema: {json.dumps(schema.metadata_schema)}
+        USER'S VARIATION REQUEST:
+        {variation_request}
 
-Generate a VARIED sample that:
-1. Addresses the user's variation request
-2. EXACTLY matches all three JSON schemas
-3. Maintains the core concept from the case abstract
-4. Creates realistic, coherent input/expected data
-5. Includes test_name in metadata
+        DOCUMENTED JSON SCHEMAS (MUST FOLLOW EXACTLY):
+        Input Schema: {json.dumps(schema.input_schema)}
+        Expected Schema: {json.dumps(schema.expected_schema)}
+        Metadata Schema: {json.dumps(schema.metadata_schema)}
 
-Return as JSON:
-{{
-    "input": /* Must match input_schema exactly */,
-    "expected": /* Must match expected_schema exactly */,
-    "metadata": {{ /* Must match metadata_schema exactly and include test_name */ }}
-}}"""
+        Generate a VARIED sample that:
+        1. Addresses the user's variation request
+        2. EXACTLY matches all three JSON schemas
+        3. Maintains the core concept from the case abstract
+        4. Creates realistic, coherent input/expected data
+        5. Includes test_name in metadata
+
+        Return as JSON:
+        {{
+            "input": /* Must match input_schema exactly */,
+            "expected": /* Must match expected_schema exactly */,
+            "metadata": {{ /* Must match metadata_schema exactly and include test_name */ }}
+        }}
+        """
 
         try:
             response = await self.ai.gen_obj(
@@ -354,7 +415,8 @@ Return as JSON:
         self,
         suggestion: GapAnalysisSuggestion,
         reference_samples: List[DatasetSample],
-        schema: InferredSchema
+        schema: InferredSchema,
+        dataset_metadata: Dict[str, Any] = None
     ) -> GeneratedSample:
         """Legacy method - convert suggestion to case abstract and generate"""
         case_abstract = CaseAbstract(
@@ -363,4 +425,4 @@ Return as JSON:
             expected_input_characteristics="Based on existing dataset patterns",
             expected_output_characteristics="Based on existing dataset patterns"
         )
-        return await self.generate_sample_for_case_abstract(case_abstract, reference_samples, schema)
+        return await self.generate_sample_for_case_abstract(case_abstract, reference_samples, schema, dataset_metadata)

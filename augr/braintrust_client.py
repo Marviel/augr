@@ -54,6 +54,34 @@ class BraintrustClient:
                 raise  # Re-raise API errors as-is
             raise Exception(f"Unexpected error listing datasets: {str(e)}")
 
+    async def get_dataset_info(self, dataset_id: str) -> Dict[str, Any]:
+        """Get detailed information about a specific dataset"""
+        try:
+            async with httpx.AsyncClient() as client:
+                url = f"{BRAINTRUST_API_BASE}/dataset/{dataset_id}"
+
+                response = await client.get(
+                    url,
+                    headers=self.headers,
+                    timeout=30.0
+                )
+
+                if response.status_code != 200:
+                    error_text = response.text
+                    raise Exception(f"API returned {response.status_code}: {error_text}")
+
+                data = response.json()
+                return data
+
+        except httpx.TimeoutException:
+            raise Exception("Request timed out - check your internet connection")
+        except httpx.RequestError as e:
+            raise Exception(f"Network error: {str(e)}")
+        except Exception as e:
+            if "API returned" in str(e):
+                raise  # Re-raise API errors as-is
+            raise Exception(f"Unexpected error fetching dataset info: {str(e)}")
+
     async def fetch_samples(self, dataset_id: str, limit: int) -> List[DatasetSample]:
         """Fetch samples from a dataset"""
         try:
