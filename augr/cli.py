@@ -187,34 +187,70 @@ class DatasetAugmentationCLI:
             print(f"   • Samples uploaded: {uploaded_count}")
 
     async def _get_dataset_id(self) -> Optional[str]:
-        """Get dataset ID from user with optional dataset listing"""
+        """Get dataset ID from user with scrollable dataset selection"""
         print("\n📊 Dataset Selection")
 
-        # Option to list datasets
+        # Option to browse datasets or enter manually
         questions = [
-            inquirer.Confirm(
-                'list_datasets',
-                message="Would you like to see available datasets first?",
-                default=False
+            inquirer.List(
+                'selection_method',
+                message="How would you like to select a dataset?",
+                choices=[
+                    ('📋 Browse available datasets (recommended)', 'browse'),
+                    ('✏️  Enter dataset ID manually', 'manual'),
+                ],
+                default='browse'
             )
         ]
         answers = inquirer.prompt(questions)
 
-        if answers['list_datasets']:
+        if answers['selection_method'] == 'browse':
             print("\n🔍 Fetching available datasets...")
             try:
                 datasets = await self.braintrust_client.list_datasets()
-                if datasets:
-                    print("\n📋 Available Datasets:")
-                    for i, dataset in enumerate(datasets[:10], 1):
-                        print(f"  {i}. {dataset.get('name', 'Unnamed')} (ID: {dataset.get('id', 'Unknown')})")
-                        if dataset.get('description'):
-                            print(f"     Description: {dataset['description']}")
+                if not datasets:
+                    print("No datasets found. You'll need to create one first.")
+                    return None
+
+                # Create choices for inquirer with dataset info
+                choices = []
+                for dataset in datasets:
+                    name = dataset.get('name', 'Unnamed')
+                    dataset_id = dataset.get('id', 'Unknown')
+                    description = dataset.get('description', '')
+                    
+                    # Create display string with name, ID, and description
+                    if description:
+                        display = f"{name} ({dataset_id}) - {description[:60]}{'...' if len(description) > 60 else ''}"
+                    else:
+                        display = f"{name} ({dataset_id})"
+                    
+                    choices.append((display, dataset_id))
+
+                # Add option to enter manually as fallback
+                choices.append(('✏️  Enter dataset ID manually instead', 'manual'))
+
+                questions = [
+                    inquirer.List(
+                        'selected_dataset',
+                        message=f"Select dataset to augment ({len(datasets)} available)",
+                        choices=choices,
+                        carousel=True  # Enable scrolling for long lists
+                    )
+                ]
+                answers = inquirer.prompt(questions)
+
+                if answers['selected_dataset'] == 'manual':
+                    # Fall through to manual entry
+                    pass
                 else:
-                    print("No datasets found.")
+                    return answers['selected_dataset']
+
             except Exception as e:
                 print(f"⚠️  Could not list datasets: {e}")
+                print("Falling back to manual entry...")
 
+        # Manual entry (either chosen directly or as fallback)
         questions = [
             inquirer.Text('dataset_id', message="Enter the dataset ID to augment")
         ]

@@ -43,9 +43,13 @@ def test_config_system():
         # Set a test API key
         os.environ['BRAINTRUST_API_KEY'] = 'test-key-12345'
         
-        from augr.config import AugrConfig
+        from augr.config import get_project_api_key, AugrConfig
+        
+        # Test that the config class can be instantiated
         config = AugrConfig()
-        api_key = config.get_api_key()
+        
+        # Test that the API key function works with environment variable
+        api_key = get_project_api_key("test-project")
         
         if api_key == 'test-key-12345':
             print("✅ Configuration system works")
